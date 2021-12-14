@@ -1,13 +1,62 @@
-import {getAllStudents} from './client';
-import './App.css';
-import {useEffect, useState} from 'react';
-import Layout, {Content, Footer, Header} from 'antd/es/layout/layout';
-import Sider from 'antd/es/layout/Sider';
-import {Breadcrumb, Menu, Table} from 'antd';
-import SubMenu from 'antd/es/menu/SubMenu';
-import {DesktopOutlined, FileOutlined, PieChartOutlined, TeamOutlined, UserOutlined} from '@ant-design/icons';
+import {useEffect, useState} from 'react'
+import {getAllStudents, removeStudent} from "./client";
+import {Avatar, Badge, Breadcrumb, Button, Empty, Layout, Menu, Popconfirm, Spin, Table, Tag,} from 'antd';
 
-const columns = [
+import {
+    DesktopOutlined,
+    FileOutlined,
+    LoadingOutlined,
+    PieChartOutlined,
+    PlusOutlined,
+    TeamOutlined,
+    UserOutlined
+} from '@ant-design/icons';
+import StudentDrawerForm from "./StudentDrawerForm";
+
+import './App.css';
+import Radio from 'antd/es/radio/radio';
+import {errorNotification, successNotification} from './Notification';
+
+const {Header, Content, Footer, Sider} = Layout;
+const {SubMenu} = Menu;
+
+const TheAvatar = ({name}) => {
+    let trim = name.trim();
+    if (trim.length === 0) {
+        return <Avatar icon={<UserOutlined/>}/>
+    }
+    const split = trim.split(" ");
+    if (split.length === 1) {
+        return <Avatar>{name.charAt(0)}</Avatar>
+    }
+    return <Avatar>{`${name.charAt(0)}${name.charAt(name.length - 1)}`}</Avatar>
+}
+
+const deleteStudent = (studentId, callback) => {
+    removeStudent(studentId).then(() => {
+        successNotification('Student deleted', `${studentId}`);
+        callback()
+    })
+        .catch(err => {
+            err.response.json().then(res => {
+                console.log(res);
+                errorNotification(
+                    "There was an issue",
+                    `${res.message} [${res.status}] [${res.error}]`,
+                    "bottomLeft"
+                )
+            });
+        })
+
+}
+
+const columns = fetchStudents => [
+    {
+        title: '',
+        dataIndex: 'avatar',
+        key: 'avatar',
+        render: (text, student) => <TheAvatar name={student.name}/>,
+    },
     {
         title: 'Id',
         dataIndex: 'id',
@@ -28,30 +77,96 @@ const columns = [
         dataIndex: 'gender',
         key: 'gender',
     },
+    {
+        title: 'Actions',
+        key: 'actions',
+        render: (text, student) =>
+            <Radio.Group>
+                <Popconfirm
+                    placement='topRight'
+                    title={`Are you sure to delete ${student.name}`}
+                    onConfirm={() => deleteStudent(student.id, fetchStudents)}
+                    okText='Yes'
+                    cancelText='No'>
+                    <Radio.Button value="small">Delete</Radio.Button>
+                </Popconfirm>
+                <Radio.Button onClick={() => alert("TODO: Implement edit student")} value="small">Edit</Radio.Button>
+            </Radio.Group>
+    }
 ];
+
+const antIcon = <LoadingOutlined style={{fontSize: 24}} spin/>;
 
 function App() {
     const [students, setStudents] = useState([]);
-    const [collapsed, setCollapsed] = useState(false)
+    const [collapsed, setCollapsed] = useState(false);
+    const [fetching, setFetching] = useState(true);
+    const [showDrawer, setShowDrawer] = useState(false);
 
     const fetchStudents = () =>
         getAllStudents()
             .then(res => res.json())
             .then(data => {
-                console.log(data)
-                setStudents(data)
+                console.log(data);
+                setStudents(data);
+                setFetching(false);
+            }).catch(err => {
+            console.log(err.response)
+            err.response.json().then(res => {
+                console.log(res);
             });
+        });
 
     useEffect(() => {
-        console.log('component is mounted');
+        console.log("component is mounted");
         fetchStudents();
-    }, [])
+    }, []);
 
-    const renderStudents = students => {
-        if (students.length <= 0) {
-            return "no data";
+    const renderStudents = () => {
+        if (fetching) {
+            return <Spin indicator={antIcon}/>
         }
-        return <Table dataSource={students} columns={columns}/>;
+        if (students.length <= 0) {
+            return <>
+                <Button
+                    onClick={() => setShowDrawer(!showDrawer)}
+                    type="primary" shape="round" icon={<PlusOutlined/>} size="small">
+                    Add New Student
+                </Button>
+                <StudentDrawerForm
+                    showDrawer={showDrawer}
+                    setShowDrawer={setShowDrawer}
+                    fetchStudents={fetchStudents}
+                />
+                <Empty/>
+            </>
+        }
+        return <>
+            <StudentDrawerForm
+                showDrawer={showDrawer}
+                setShowDrawer={setShowDrawer}
+                fetchStudents={fetchStudents}
+            />
+            <Table
+                dataSource={students}
+                columns={columns(fetchStudents)}
+                bordered
+                title={() =>
+                    <>
+                        <Button
+                            onClick={() => setShowDrawer(!showDrawer)}
+                            type="primary" shape="round" icon={<PlusOutlined/>} size="small">
+                            Add New Student
+                        </Button>
+                        <Tag style={{marginLeft: '10px'}}>Number of students</Tag>
+                        <Badge count={students.length} className="site-badge-count-4"/>
+                    </>
+                }
+                pagination={{pageSize: 50}}
+                scroll={{y: 500}}
+                rowKey={student => student.id}
+            />
+        </>
 
     }
 
@@ -88,12 +203,10 @@ function App() {
                     <Breadcrumb.Item>Bill</Breadcrumb.Item>
                 </Breadcrumb>
                 <div className="site-layout-background" style={{padding: 24, minHeight: 360}}>
-
-                    <Table dataSource={students} columns={columns} bordered
-                    title={() => 'Students'}/>;
+                    {renderStudents()}
                 </div>
             </Content>
-            <Footer style={{textAlign: 'center'}}>Ant Design ©2018 Created by Ant UED</Footer>
+            <Footer style={{textAlign: 'center'}}>By Amigoscode</Footer>
         </Layout>
     </Layout>
 }
